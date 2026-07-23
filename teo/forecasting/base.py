@@ -36,7 +36,7 @@ def _atr(candles: list[Candle], period: int = 14) -> float:
     if len(candles) < 2:
         return 0.0
     trs: list[float] = []
-    for prev, cur in zip(candles[:-1], candles[1:]):
+    for prev, cur in zip(candles[:-1], candles[1:], strict=False):
         tr = max(
             cur.high - cur.low,
             abs(cur.high - prev.close),

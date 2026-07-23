@@ -27,7 +27,7 @@ def _atr_series(candles: list[Candle], period: int = 14) -> list[float]:
         return []
     atr: list[float] = [0.0]
     trs: list[float] = []
-    for prev, cur in zip(candles[:-1], candles[1:]):
+    for prev, cur in zip(candles[:-1], candles[1:], strict=False):
         tr = max(cur.high - cur.low, abs(cur.high - prev.close), abs(cur.low - prev.close))
         trs.append(tr)
         window = trs[-period:]
