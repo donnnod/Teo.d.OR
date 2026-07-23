@@ -1,9 +1,10 @@
 """Kronos forecaster — real inference wiring with a clean baseline fallback.
 
 Kronos (https://github.com/shiyu-coder/Kronos) is an open-source foundation model for financial
-K-lines. Its `Kronos`, `KronosTokenizer` and `KronosPredictor` classes ship in Kronos's own `model`
-package (they subclass `PyTorchModelHubMixin`), so torch + the model code are optional extras —
-`pip install -e ".[kronos]"`, plus the Kronos `model` package importable on the path.
+K-lines. Its `Kronos`, `KronosTokenizer` and `KronosPredictor` classes are published on PyPI as
+`kronos-model-arch` (importable as the top-level `model` package; they subclass
+`PyTorchModelHubMixin`), so torch + the model code are optional extras
+(`pip install -e ".[kronos]"`).
 
 This wrapper:
   * lazily builds the predictor on first use (tokenizer + model from HuggingFace),
@@ -52,12 +53,14 @@ class KronosForecaster:
         if self._predictor is not None:
             return
         try:
-            # The Kronos model package must be importable (installed or vendored on PYTHONPATH).
+            # `kronos-model-arch` (the `[kronos]` extra) installs these under `model`;
+            # a vendored `model/` on PYTHONPATH works identically.
             from model import Kronos, KronosPredictor, KronosTokenizer
         except ImportError as e:
             raise KronosUnavailable(
-                "Kronos not installed. Install the extras and make the Kronos `model` package "
-                f"importable (see README → Enabling Kronos). Import error: {e}"
+                "Kronos not installed. Install the extras (`pip install -e \".[kronos]\"`) "
+                f"or vendor the Kronos `model` package (see README → Enabling Kronos). "
+                f"Import error: {e}"
             ) from e
 
         try:

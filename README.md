@@ -45,19 +45,19 @@ before any GPU/model is wired in.
 
 ## Enabling Kronos
 
-Kronos is a PyTorch model whose `Kronos` / `KronosTokenizer` / `KronosPredictor` classes ship in the
-[Kronos repo's](https://github.com/shiyu-coder/Kronos) own `model` package (they subclass
-`PyTorchModelHubMixin`). So enabling real inference is two steps:
+Kronos is a PyTorch model whose `Kronos` / `KronosTokenizer` / `KronosPredictor` classes are
+published on PyPI as [`kronos-model-arch`](https://pypi.org/project/kronos-model-arch/) (MIT), which
+installs them under the top-level `model` package our adapter imports. So enabling real inference is
+now a single step:
 
 ```bash
-# 1) install the heavy deps
-pip install -e ".[kronos]"        # torch + huggingface-hub + safetensors + pandas
-
-# 2) make the Kronos `model` package importable (it isn't on PyPI)
-#    e.g. clone it and add to PYTHONPATH, or vendor model/ into your deployment
-git clone https://github.com/shiyu-coder/Kronos
-export PYTHONPATH="$PWD/Kronos:$PYTHONPATH"
+pip install -e ".[kronos]"   # kronos-model-arch + torch + huggingface-hub + safetensors + pandas
 ```
+
+> **Note:** `kronos-model-arch` (v0.1.0) pins some transitive versions (e.g. `matplotlib==3.9.3`).
+> If those clash with your environment, vendor the two model files (`model/kronos.py`,
+> `model/module.py` — MIT-licensed) onto `PYTHONPATH` instead; the adapter's `from model import …`
+> works identically either way. The weights themselves still download from HuggingFace on first use.
 
 Then point Teo at the weights:
 
@@ -86,9 +86,17 @@ device, or an inference error — Teo raises internally and falls back to the tr
 | `POST` | `/forecast` | OHLCV history → forecast (fetches its own candles if none supplied) |
 | `POST` | `/backtest` | replay history through a strategy config → performance metrics |
 | `POST` | `/optimize` | parameter sweep over recent candles → ranked configs + market regime |
-| `POST` | `/selfheal` | detect degradation of the current config → propose a config swap when warranted |
+| `POST` | `/selfheal` | detect degradation → propose a config swap; optionally persist + recall regime memory |
+| `GET`  | `/assets`   | the multi-asset registry Teo covers (filter by `?tier=` / `?source=`) |
 
 See `teo/models.py` for the exact request/response schemas.
+
+Run the self-heal loop across all live assets on a schedule (what the dashboard cron calls):
+
+```bash
+python -m teo.loop --interval 15m --lookback 1000     # all live tier-1 assets
+python -m teo.loop --symbol BTCUSDT --interval 15m     # a single asset
+```
 
 ## Self-healing (the "brain + memory")
 
@@ -106,9 +114,16 @@ config forever:
    a candidate that clears a minimum improvement margin, it returns `action: "propose_swap"` with the
    proposed config, the expected score gain, and the regime it fired in. Otherwise it holds.
 
+4. **Regime-tagged memory** (`teo/memory.py`) — every cycle appends its outcome (symbol, regime,
+   config, score) to a JSON store. On the next cycle in the *same* regime, `/selfheal` **recalls**
+   the best config it ever saw in those conditions (`recalled` in the response), so adaptation
+   compounds instead of re-deriving from scratch. Pass `persist: true` to record the outcome.
+5. **The loop** (`teo/loop.py`, `python -m teo.loop`) fans steps 1–4 across the asset registry on a
+   schedule — this is what a dashboard cron drives. Fetching is injected, so it's fully unit-tested
+   without network.
+
 Teo **proposes**, it doesn't silently self-modify — the dashboard owns whether to apply the swap and
-logs it for auditability. Persisting per-regime winners so the loop *recalls* what worked last time
-this regime appeared is the next roadmap item.
+logs it for auditability.
 
 ## Layout
 
@@ -126,6 +141,9 @@ teo/
     regime.py         trend / volatility regime detection
     sweep.py          parameter-sweep engine + risk-adjusted scoring
   selfheal.py         degradation detection + config-swap proposal
+  memory.py           regime-tagged outcome store (JSON) — recall best-per-regime
+  assets.py           multi-asset registry (tiers 1–3, parity with the dashboard)
+  loop.py             self-heal orchestration + CLI (python -m teo.loop)
 tests/                pytest suite (runs without ML deps)
 ```
 
@@ -136,9 +154,11 @@ tests/                pytest suite (runs without ML deps)
 - [x] Regime detection (trend/vol) tagging the sweep + self-heal decisions
 - [x] Parameter-sweep engine (`/optimize`) — ranked risk-adjusted configs
 - [x] Self-healing endpoint (`/selfheal`) — detect degradation → propose a config swap
-- [ ] Persist regime-tagged outcomes so self-heal recalls per-regime winners over time
-- [ ] Scheduled self-heal loop wired to the dashboard's live journal
-- [ ] Multi-asset parity with the dashboard's asset registry
+- [x] Persist regime-tagged outcomes so self-heal recalls per-regime winners over time (`memory.py`)
+- [x] Scheduled self-heal loop across the asset registry (`loop.py`, `python -m teo.loop`)
+- [x] Multi-asset registry — tiers 1–3, parity with the dashboard (`assets.py`, `GET /assets`)
+- [ ] Wire the loop's proposals into the dashboard's live journal (apply/audit on the Convex side)
+- [ ] Tier-2/3 data feeds (Hyperliquid, Kraken/XMR, equities) — registry is ready, fetchers pending
 
 ## License
 

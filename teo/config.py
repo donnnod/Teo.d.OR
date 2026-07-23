@@ -22,6 +22,9 @@ class Settings:
     kronos_device: str = _env("TEO_KRONOS_DEVICE", "cpu")
     kronos_max_context: int = int(_env("TEO_KRONOS_MAX_CONTEXT", "512"))
 
+    # Regime-tagged outcome memory (roadmap 1). JSON file; the self-heal loop appends to it.
+    memory_path: str = _env("TEO_MEMORY_PATH", ".teo_memory.json")
+
     # Guardrails.
     max_candles: int = int(_env("TEO_MAX_CANDLES", "2000"))
     max_horizon: int = int(_env("TEO_MAX_HORIZON", "120"))

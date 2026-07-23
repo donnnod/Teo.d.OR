@@ -19,7 +19,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Real Kronos inference. Optional so the service runs & tests without heavy ML deps.
+# `kronos-model-arch` is the official PyPI package for the Kronos architecture; it installs
+# the `Kronos`, `KronosTokenizer` and `KronosPredictor` classes under the top-level `model`
+# package (which our adapter imports) and pulls torch + einops + safetensors + huggingface-hub.
 kronos = [
+    "kronos-model-arch>=0.1.0",
     "torch>=2.2",
     "huggingface-hub>=0.23",
     "safetensors>=0.4",

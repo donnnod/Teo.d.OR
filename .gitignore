@@ -25,3 +25,7 @@ models/
 
 # OS
 .DS_Store
+
+# Regime-tagged outcome memory (runtime state)
+.teo_memory.json
+*.teo_memory.json

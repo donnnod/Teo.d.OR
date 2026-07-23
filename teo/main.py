@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 
 from teo import __version__
+from teo.assets import REGISTRY
+from teo.assets import assets as list_assets
 from teo.backtest.engine import run_backtest
 from teo.backtest.regime import Regime, detect_regime
 from teo.backtest.sweep import run_sweep, score_metrics
@@ -12,17 +14,22 @@ from teo.config import settings
 from teo.data.binance import fetch_klines
 from teo.forecasting.base import BaselineForecaster
 from teo.forecasting.kronos import KronosUnavailable, get_kronos
+from teo.memory import OutcomeMemory
 from teo.models import (
+    AssetInfo,
+    AssetsResponse,
     BacktestRequest,
     BacktestResponse,
     ForecastRequest,
     ForecastResponse,
     OptimizeRequest,
     OptimizeResponse,
+    RecalledOutcome,
     RegimeInfo,
     ScoredConfig,
     SelfHealRequest,
     SelfHealResponse,
+    StrategyConfig,
 )
 from teo.selfheal import HealthThresholds, assess
 
@@ -92,6 +99,29 @@ async def backtest(req: BacktestRequest) -> BacktestResponse:
     )
 
 
+_memory = OutcomeMemory(settings.memory_path)
+
+
+@app.get("/assets", response_model=AssetsResponse)
+async def get_assets(tier: int | None = None, source: str | None = None) -> AssetsResponse:
+    """The multi-asset registry Teo forecasts / self-heals over (roadmap 3)."""
+    rows = list_assets(tier=tier, source=source) if (tier or source) else REGISTRY
+    return AssetsResponse(
+        count=len(rows),
+        assets=[
+            AssetInfo(
+                symbol=a.symbol,
+                label=a.label,
+                source=a.source,
+                kind=a.kind,
+                tier=a.tier,
+                market_hours=a.market_hours,
+            )
+            for a in rows
+        ],
+    )
+
+
 def _regime_info(regime: Regime) -> RegimeInfo:
     return RegimeInfo(
         trend=regime.trend,
@@ -158,6 +188,38 @@ async def selfheal(req: SelfHealRequest) -> SelfHealResponse:
             config=decision.proposed_config, metrics=best.metrics, score=best.score
         )
 
+    # Roadmap 1 — recall the best prior outcome for this symbol+regime, and optionally persist this.
+    recalled = None
+    prior = _memory.best_for_regime(req.symbol, regime.label)
+    if prior is not None:
+        recalled = RecalledOutcome(
+            regime=prior.regime,
+            score=prior.score,
+            config=StrategyConfig(**prior.config),
+            action=prior.action,
+            ts=prior.ts,
+        )
+
+    persisted = False
+    if req.persist:
+        if decision.action == "propose_swap" and decision.proposed_config is not None:
+            _memory.record(
+                symbol=req.symbol,
+                regime=regime.label,
+                score=decision.proposed_score or 0.0,
+                config=decision.proposed_config,
+                action="propose_swap",
+            )
+        else:
+            _memory.record(
+                symbol=req.symbol,
+                regime=regime.label,
+                score=score_metrics(current_metrics, min_trades=req.min_trades),
+                config=req.current,
+                action="hold",
+            )
+        persisted = True
+
     return SelfHealResponse(
         symbol=req.symbol,
         interval=req.interval,
@@ -173,4 +235,6 @@ async def selfheal(req: SelfHealRequest) -> SelfHealResponse:
         ),
         proposed=proposed,
         improvement=decision.improvement,
+        recalled=recalled,
+        persisted=persisted,
     )

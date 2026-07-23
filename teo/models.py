@@ -134,6 +134,16 @@ class SelfHealRequest(BaseModel):
     min_win_rate: float = 0.30
     min_trades: int = Field(10, ge=0, le=1000)
     min_score_improvement: float = 0.15
+    # Persist this outcome to regime-tagged memory (roadmap 1) so future cycles can recall it.
+    persist: bool = False
+
+
+class RecalledOutcome(BaseModel):
+    regime: str
+    score: float
+    config: StrategyConfig
+    action: str
+    ts: float
 
 
 class SelfHealResponse(BaseModel):
@@ -147,3 +157,20 @@ class SelfHealResponse(BaseModel):
     current: ScoredConfig
     proposed: ScoredConfig | None = None
     improvement: float | None = None
+    # Best prior outcome recorded for this symbol+regime (roadmap 1 memory), if any.
+    recalled: RecalledOutcome | None = None
+    persisted: bool = False
+
+
+class AssetInfo(BaseModel):
+    symbol: str
+    label: str
+    source: str
+    kind: str
+    tier: int
+    market_hours: bool
+
+
+class AssetsResponse(BaseModel):
+    count: int
+    assets: list[AssetInfo]
