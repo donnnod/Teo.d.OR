@@ -45,16 +45,38 @@ before any GPU/model is wired in.
 
 ## Enabling Kronos
 
-Kronos is a PyTorch model, so it's an optional extra:
+Kronos is a PyTorch model whose `Kronos` / `KronosTokenizer` / `KronosPredictor` classes ship in the
+[Kronos repo's](https://github.com/shiyu-coder/Kronos) own `model` package (they subclass
+`PyTorchModelHubMixin`). So enabling real inference is two steps:
 
 ```bash
-pip install -e ".[kronos]"        # torch + huggingface-hub + safetensors
-export TEO_KRONOS_MODEL=NeoQuasar/Kronos-small   # HF repo id (mini | small | base)
+# 1) install the heavy deps
+pip install -e ".[kronos]"        # torch + huggingface-hub + safetensors + pandas
+
+# 2) make the Kronos `model` package importable (it isn't on PyPI)
+#    e.g. clone it and add to PYTHONPATH, or vendor model/ into your deployment
+git clone https://github.com/shiyu-coder/Kronos
+export PYTHONPATH="$PWD/Kronos:$PYTHONPATH"
 ```
 
-On first call Teo lazily downloads the pretrained weights from HuggingFace and caches them. If loading fails
-for any reason, it falls back to the baseline and reports the reason in the response — it never hard-crashes a
-forecast request.
+Then point Teo at the weights:
+
+```bash
+export TEO_KRONOS_MODEL=NeoQuasar/Kronos-small          # mini | small | base
+export TEO_KRONOS_TOKENIZER=NeoQuasar/Kronos-Tokenizer-base   # optional; sensible default
+export TEO_KRONOS_DEVICE=cuda:0                         # cpu works too, just slower
+export TEO_KRONOS_MAX_CONTEXT=512                       # context window (bars)
+```
+
+On first call Teo lazily builds the predictor (tokenizer + model from HuggingFace), then runs genuine
+inference via `KronosPredictor.predict(...)`: the predicted per-bar high/low become the forecast cone and
+the final predicted close drives the directional read. If **anything** is missing or fails — deps, weights,
+device, or an inference error — Teo raises internally and falls back to the transparent baseline, so a
+`/forecast` request never hard-crashes.
+
+> The torch-free glue (interval math, future timestamps, predicted-OHLCV → cone) lives in
+> `teo/forecasting/kronos_adapt.py` and is fully unit-tested without any ML dependency; `kronos.py`
+> owns only the model/torch side.
 
 ## API
 
@@ -84,7 +106,7 @@ tests/                pytest suite (runs without ML deps)
 ## Roadmap
 
 - [x] Service scaffold + baseline forecaster + backtest skeleton
-- [ ] Wire real Kronos inference (tokenizer + model head)
+- [x] Wire real Kronos inference (tokenizer + model + predictor, with baseline fallback)
 - [ ] Regime-tagged outcome memory feeding the sweep
 - [ ] Self-healing endpoint: detect live degradation → re-sweep → propose config swap
 - [ ] Multi-asset parity with the dashboard's asset registry

@@ -18,7 +18,9 @@ class Settings:
 
     # Kronos: HF repo id for the pretrained weights. Empty => baseline forecaster only.
     kronos_model: str = _env("TEO_KRONOS_MODEL", "")
+    kronos_tokenizer: str = _env("TEO_KRONOS_TOKENIZER", "")  # empty => sensible default
     kronos_device: str = _env("TEO_KRONOS_DEVICE", "cpu")
+    kronos_max_context: int = int(_env("TEO_KRONOS_MAX_CONTEXT", "512"))
 
     # Guardrails.
     max_candles: int = int(_env("TEO_MAX_CANDLES", "2000"))
