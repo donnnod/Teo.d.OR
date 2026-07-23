@@ -87,3 +87,63 @@ class BacktestResponse(BaseModel):
     bars: int
     metrics: BacktestMetrics
     note: str | None = None
+
+
+class RegimeInfo(BaseModel):
+    trend: str
+    volatility: str
+    trend_strength: float
+    atr_pct: float
+    label: str
+
+
+class ScoredConfig(BaseModel):
+    config: StrategyConfig
+    metrics: BacktestMetrics
+    score: float
+
+
+class OptimizeRequest(BaseModel):
+    symbol: str = "BTCUSDT"
+    interval: str = "5m"
+    lookback: int = Field(1000, ge=60, le=5000)
+    base: StrategyConfig = StrategyConfig()
+    # Optional override grid: {knob: [values]}; omit to use the engine's default grid.
+    grid: dict[str, list] | None = None
+    top_k: int = Field(5, ge=1, le=25)
+    min_trades: int = Field(10, ge=0, le=1000)
+
+
+class OptimizeResponse(BaseModel):
+    symbol: str
+    interval: str
+    bars: int
+    regime: RegimeInfo
+    best: ScoredConfig | None
+    ranked: list[ScoredConfig]
+    note: str | None = None
+
+
+class SelfHealRequest(BaseModel):
+    symbol: str = "BTCUSDT"
+    interval: str = "5m"
+    lookback: int = Field(1000, ge=60, le=5000)
+    current: StrategyConfig = StrategyConfig()
+    grid: dict[str, list] | None = None
+    min_profit_factor: float = 1.0
+    min_win_rate: float = 0.30
+    min_trades: int = Field(10, ge=0, le=1000)
+    min_score_improvement: float = 0.15
+
+
+class SelfHealResponse(BaseModel):
+    symbol: str
+    interval: str
+    bars: int
+    regime: RegimeInfo
+    status: str  # healthy | degraded | insufficient_data
+    action: str  # hold | propose_swap
+    reason: str
+    current: ScoredConfig
+    proposed: ScoredConfig | None = None
+    improvement: float | None = None

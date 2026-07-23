@@ -85,8 +85,30 @@ device, or an inference error — Teo raises internally and falls back to the tr
 | `GET`  | `/health`   | liveness + which forecaster is active |
 | `POST` | `/forecast` | OHLCV history → forecast (fetches its own candles if none supplied) |
 | `POST` | `/backtest` | replay history through a strategy config → performance metrics |
+| `POST` | `/optimize` | parameter sweep over recent candles → ranked configs + market regime |
+| `POST` | `/selfheal` | detect degradation of the current config → propose a config swap when warranted |
 
 See `teo/models.py` for the exact request/response schemas.
+
+## Self-healing (the "brain + memory")
+
+The self-healing loop is how Teo keeps adapting as markets shift, instead of running one static
+config forever:
+
+1. **Regime detection** (`teo/backtest/regime.py`) tags the recent window as trend up / down / chop
+   plus a volatility band — so every judgement is made *in context*, not on raw recent bars alone.
+2. **Parameter sweep** (`teo/backtest/sweep.py`, `POST /optimize`) backtests a grid of strategy
+   knobs and ranks them on a **risk-adjusted score** (return per unit of drawdown, nudged by profit
+   factor and win rate). Under-traded configs are pushed to the bottom so a lucky 2-trade config
+   can't win.
+3. **The decision** (`teo/selfheal.py`, `POST /selfheal`) scores the *current* config on recent
+   data; if it has degraded (profit factor / win-rate below the thresholds) **and** the sweep finds
+   a candidate that clears a minimum improvement margin, it returns `action: "propose_swap"` with the
+   proposed config, the expected score gain, and the regime it fired in. Otherwise it holds.
+
+Teo **proposes**, it doesn't silently self-modify — the dashboard owns whether to apply the swap and
+logs it for auditability. Persisting per-regime winners so the loop *recalls* what worked last time
+this regime appeared is the next roadmap item.
 
 ## Layout
 
@@ -99,7 +121,11 @@ teo/
   forecasting/
     base.py           Forecaster protocol + baseline implementation
     kronos.py         lazy Kronos wrapper (optional torch)
-  backtest/engine.py  candle replay + metrics
+  backtest/
+    engine.py         candle replay + metrics
+    regime.py         trend / volatility regime detection
+    sweep.py          parameter-sweep engine + risk-adjusted scoring
+  selfheal.py         degradation detection + config-swap proposal
 tests/                pytest suite (runs without ML deps)
 ```
 
@@ -107,8 +133,11 @@ tests/                pytest suite (runs without ML deps)
 
 - [x] Service scaffold + baseline forecaster + backtest skeleton
 - [x] Wire real Kronos inference (tokenizer + model + predictor, with baseline fallback)
-- [ ] Regime-tagged outcome memory feeding the sweep
-- [ ] Self-healing endpoint: detect live degradation → re-sweep → propose config swap
+- [x] Regime detection (trend/vol) tagging the sweep + self-heal decisions
+- [x] Parameter-sweep engine (`/optimize`) — ranked risk-adjusted configs
+- [x] Self-healing endpoint (`/selfheal`) — detect degradation → propose a config swap
+- [ ] Persist regime-tagged outcomes so self-heal recalls per-regime winners over time
+- [ ] Scheduled self-heal loop wired to the dashboard's live journal
 - [ ] Multi-asset parity with the dashboard's asset registry
 
 ## License
