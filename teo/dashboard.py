@@ -1,0 +1,71 @@
+"""
+Dashboard bridge — submits trade proposals to the Convex /teo/propose endpoint.
+
+Usage:
+    from teo.dashboard import submit_to_dashboard
+
+    await submit_to_dashboard({
+        "direction": "LONG",
+        "entryPrice": 3450.0,
+        "stopLoss": 3420.0,
+        "tp1": 3490.0,
+        "tp2": 3540.0,
+        "confidence": 72.0,
+        "reason": "Bull sweep below support, regime: trend_up",
+        "timeframe": "15m",
+        "bias": "trend_up",
+        "biasStrength": 0.75,
+        "spotPrice": 3455.0,
+        "asset": "PAXGUSDT",
+        "teoScore": 0.72,
+        "teoRegime": "trend_up",
+    })
+"""
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any
+
+import httpx
+
+log = logging.getLogger(__name__)
+
+
+def get_dashboard_url() -> str | None:
+    """Return the Convex HTTP URL from TEO_DASHBOARD_URL env var, or None if not set."""
+    url = os.environ.get("TEO_DASHBOARD_URL", "").strip().rstrip("/")
+    return url or None
+
+
+async def submit_to_dashboard(proposal: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    POST a trade proposal to the Convex /teo/propose endpoint.
+
+    Returns the response JSON dict on success, None on failure (error is logged).
+    Silently skips (returns None) if TEO_DASHBOARD_URL is not configured.
+    """
+    url = get_dashboard_url()
+    if not url:
+        log.debug("TEO_DASHBOARD_URL not set — proposal not submitted to dashboard")
+        log.info("Unsubmitted proposal: %s", proposal)
+        return None
+
+    endpoint = f"{url}/teo/propose"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(endpoint, json=proposal)
+            resp.raise_for_status()
+            result: dict[str, Any] = resp.json()
+            log.info("Proposal submitted to dashboard: ideaId=%s", result.get("id"))
+            return result
+    except httpx.HTTPStatusError as exc:
+        log.warning(
+            "Dashboard submission HTTP error: %s %s — %s",
+            exc.response.status_code,
+            endpoint,
+            exc.response.text[:200],
+        )
+    except httpx.RequestError as exc:
+        log.warning("Dashboard submission request error: %s", exc)
+    return None

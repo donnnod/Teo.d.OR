@@ -10,6 +10,15 @@ venv/
 .env
 .env.local
 
+# Node / Vite
+node_modules/
+
+# Convex — auto-generated at deploy time, NEVER commit
+convex/_generated/
+
+# Temp / screenshots
+tmp/
+
 # Tooling
 .pytest_cache/
 .ruff_cache/
@@ -29,3 +38,4 @@ models/
 # Regime-tagged outcome memory (runtime state)
 .teo_memory.json
 *.teo_memory.json
+package-lock.json
