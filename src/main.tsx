@@ -1,6 +1,18 @@
-// Stub entry point — full React frontend is in the marcus/full-app branch.
-// Replace src/ with the full frontend to activate the dashboard.
-const root = document.getElementById("root");
-if (root) {
-  root.textContent = "Teo Dashboard — deploying…";
-}
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import "./index.css";
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <ConvexProvider client={convex}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ConvexProvider>
+  </StrictMode>,
+);

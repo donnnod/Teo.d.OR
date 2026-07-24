@@ -14,6 +14,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    "noImplicitAny": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
@@ -24,12 +25,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": [
-    "src/lib",
-    "src/hooks",
-    "src/contexts",
-    "src/components/ui",
-    "src/vite-env.d.ts"
-  ],
-  "exclude": ["src/hooks/useAutoMonitor.ts"]
+  "include": ["src"]
 }

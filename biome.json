@@ -33,7 +33,10 @@
         "useButtonType": "off",
         "useKeyWithClickEvents": "off",
         "useAriaPropsForRole": "off",
-        "noRedundantRoles": "off"
+        "noRedundantRoles": "off",
+        "noStaticElementInteractions": "off",
+        "noLabelWithoutControl": "off",
+        "noAutofocus": "off"
       },
       "suspicious": {
         "noExplicitAny": "off",
