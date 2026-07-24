@@ -1,0 +1,80 @@
+"""Tests for teo.dashboard — submit_to_dashboard()."""
+from __future__ import annotations
+
+import httpx
+import pytest
+import respx
+
+from teo.dashboard import get_dashboard_url, submit_to_dashboard
+
+PROPOSAL = {
+    "direction": "LONG",
+    "entryPrice": 3450.0,
+    "stopLoss": 3420.0,
+    "tp1": 3490.0,
+    "tp2": 3540.0,
+    "confidence": 72.0,
+    "reason": "Test proposal",
+    "timeframe": "15m",
+    "bias": "trend_up",
+    "biasStrength": 0.75,
+    "spotPrice": 3455.0,
+    "asset": "PAXGUSDT",
+    "teoScore": 0.72,
+    "teoRegime": "trend_up",
+}
+
+
+def test_url_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TEO_DASHBOARD_URL", raising=False)
+    assert get_dashboard_url() is None
+
+
+def test_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "https://x.convex.site/")
+    assert get_dashboard_url() == "https://x.convex.site"
+
+
+def test_url_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "  https://x.convex.site  ")
+    assert get_dashboard_url() == "https://x.convex.site"
+
+
+@pytest.mark.asyncio
+async def test_skip_when_no_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TEO_DASHBOARD_URL", raising=False)
+    result = await submit_to_dashboard(PROPOSAL)
+    assert result is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "https://x.convex.site")
+    respx.post("https://x.convex.site/teo/propose").mock(
+        return_value=httpx.Response(200, json={"ok": True, "id": "abc123"})
+    )
+    result = await submit_to_dashboard(PROPOSAL)
+    assert result == {"ok": True, "id": "abc123"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_none_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "https://x.convex.site")
+    respx.post("https://x.convex.site/teo/propose").mock(
+        return_value=httpx.Response(500, json={"error": "Server error"})
+    )
+    result = await submit_to_dashboard(PROPOSAL)
+    assert result is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_none_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "https://x.convex.site")
+    respx.post("https://x.convex.site/teo/propose").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+    result = await submit_to_dashboard(PROPOSAL)
+    assert result is None
