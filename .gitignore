@@ -39,3 +39,4 @@ models/
 .teo_memory.json
 *.teo_memory.json
 package-lock.json
+package-lock.json
