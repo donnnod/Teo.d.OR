@@ -8,6 +8,15 @@ import {
 
 const FALLBACK_PRICE = 3240.5;
 
+type Candle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
 // Fetch live XAU/USD price from free APIs
 export const fetchLivePrice = action({
   args: {},
@@ -144,7 +153,7 @@ export const fetchCandles = action({
 
     const now = Math.floor(Date.now() / 1000);
     const step = 300; // 5 min candle base
-    const candles = [];
+    const candles: Candle[] = [];
 
     let currentPrice = basePrice * 0.998; // start slightly below so last candle ends near spot
     const startTime = now - count * step;
