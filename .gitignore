@@ -14,7 +14,10 @@ venv/
 node_modules/
 
 # Convex — auto-generated at deploy time, NEVER commit
-convex/_generated/
+convex/_generated/*
+!convex/_generated/api.ts
+!convex/_generated/dataModel.ts
+!convex/_generated/server.d.ts
 
 # Temp / screenshots
 tmp/

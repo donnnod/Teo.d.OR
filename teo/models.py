@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+StrategyId = Literal["edge", "hedge"]
 
 
 class Candle(BaseModel):
@@ -60,10 +64,13 @@ class StrategyConfig(BaseModel):
     ema_slow: int = 21
     ema_trend: int = 50
     atr_trail_mult: float = 2.0
+    # Defensive inverse leg for strategy_id="hedge"; edge ignores this value.
+    hedge_ratio: float = Field(0.35, ge=0.0, le=0.95)
 
 
 class BacktestRequest(BaseModel):
     symbol: str = "BTCUSDT"
+    strategy_id: StrategyId = "edge"
     interval: str = "5m"
     start: int | None = Field(None, description="epoch ms; omit to use lookback")
     end: int | None = Field(None, description="epoch ms; omit for now")
@@ -83,6 +90,7 @@ class BacktestMetrics(BaseModel):
 
 class BacktestResponse(BaseModel):
     symbol: str
+    strategy_id: StrategyId
     interval: str
     bars: int
     metrics: BacktestMetrics
@@ -105,6 +113,7 @@ class ScoredConfig(BaseModel):
 
 class OptimizeRequest(BaseModel):
     symbol: str = "BTCUSDT"
+    strategy_id: StrategyId = "edge"
     interval: str = "5m"
     lookback: int = Field(1000, ge=60, le=5000)
     base: StrategyConfig = StrategyConfig()
@@ -116,6 +125,7 @@ class OptimizeRequest(BaseModel):
 
 class OptimizeResponse(BaseModel):
     symbol: str
+    strategy_id: StrategyId
     interval: str
     bars: int
     regime: RegimeInfo
@@ -126,6 +136,7 @@ class OptimizeResponse(BaseModel):
 
 class SelfHealRequest(BaseModel):
     symbol: str = "BTCUSDT"
+    strategy_id: StrategyId = "edge"
     interval: str = "5m"
     lookback: int = Field(1000, ge=60, le=5000)
     current: StrategyConfig = StrategyConfig()
@@ -148,6 +159,7 @@ class RecalledOutcome(BaseModel):
 
 class SelfHealResponse(BaseModel):
     symbol: str
+    strategy_id: StrategyId
     interval: str
     bars: int
     regime: RegimeInfo

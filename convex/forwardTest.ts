@@ -53,6 +53,8 @@ export const proposeTrade = internalMutation({
     await ctx.db.insert("signalJournal", {
       eventType: "SIGNAL_GENERATED",
       ideaId,
+      source: "teo",
+      asset: symbol,
       direction: args.direction,
       price: args.entryPrice,
       details: `[Teo] ${args.direction} ${symbol} @ ${args.entryPrice} | regime: ${args.teoRegime ?? "unknown"} | score: ${args.teoScore ?? "n/a"}`,

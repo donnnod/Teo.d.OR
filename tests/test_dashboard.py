@@ -5,7 +5,7 @@ import httpx
 import pytest
 import respx
 
-from teo.dashboard import get_dashboard_url, submit_to_dashboard
+from teo.dashboard import get_dashboard_url, submit_decision_to_dashboard, submit_to_dashboard
 
 PROPOSAL = {
     "direction": "LONG",
@@ -67,6 +67,26 @@ async def test_none_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     result = await submit_to_dashboard(PROPOSAL)
     assert result is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_decision_journal_submission(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEO_DASHBOARD_URL", "https://x.convex.site")
+    decision = {
+        "asset": "BTCUSDT",
+        "strategyId": "hedge",
+        "regime": "trend_up/normal_vol",
+        "status": "healthy",
+        "action": "hold",
+        "reason": "no swap proposed",
+        "currentScore": 0.42,
+    }
+    respx.post("https://x.convex.site/teo/decision").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    result = await submit_decision_to_dashboard(decision)
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio

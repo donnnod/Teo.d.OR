@@ -69,3 +69,39 @@ async def submit_to_dashboard(proposal: dict[str, Any]) -> dict[str, Any] | None
     except httpx.RequestError as exc:
         log.warning("Dashboard submission request error: %s", exc)
     return None
+
+
+async def submit_decision_to_dashboard(decision: dict[str, Any]) -> dict[str, Any] | None:
+    """Record a Teo hold/proposal decision in the dashboard journal.
+
+    This endpoint is append-only: it records the decision and never applies a proposed
+    configuration. If the dashboard URL is absent, the decision remains in local logs.
+    """
+    url = get_dashboard_url()
+    if not url:
+        log.debug("TEO_DASHBOARD_URL not set — decision not submitted to dashboard")
+        log.info("Unsubmitted Teo decision: %s", decision)
+        return None
+
+    endpoint = f"{url}/teo/decision"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(endpoint, json=decision)
+            resp.raise_for_status()
+            result: dict[str, Any] = resp.json()
+            log.info(
+                "Teo decision submitted: asset=%s action=%s",
+                decision.get("asset"),
+                decision.get("action"),
+            )
+            return result
+    except httpx.HTTPStatusError as exc:
+        log.warning(
+            "Decision journal HTTP error: %s %s — %s",
+            exc.response.status_code,
+            endpoint,
+            exc.response.text[:200],
+        )
+    except httpx.RequestError as exc:
+        log.warning("Decision journal request error: %s", exc)
+    return None

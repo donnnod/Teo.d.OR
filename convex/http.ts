@@ -6,8 +6,8 @@ const http = httpRouter();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 // ── Binance klines proxy (via data-api.binance.vision — no geo-restrictions) ──
@@ -184,6 +184,64 @@ http.route({
 
 http.route({
   path: "/teo/propose",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }),
+});
+
+// ── Teo self-heal decision journal ──
+// This records hold/proposal decisions but never applies a strategy change.
+http.route({
+  path: "/teo/decision",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const required = ["asset", "strategyId", "regime", "status", "action", "reason"];
+      if (required.some(key => typeof body[key] !== "string")) {
+        return new Response(JSON.stringify({ error: "Missing required decision fields" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const currentScore = Number(body.currentScore ?? 0);
+      if (!Number.isFinite(currentScore)) {
+        return new Response(JSON.stringify({ error: "currentScore must be finite" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const result = await ctx.runMutation(internal.teoDecisions.recordDecision, {
+        asset: body.asset as string,
+        strategyId: body.strategyId as string,
+        regime: body.regime as string,
+        status: body.status as string,
+        action: body.action as string,
+        reason: body.reason as string,
+        currentScore,
+        proposedScore:
+          body.proposedScore === undefined ? undefined : Number(body.proposedScore),
+        improvement:
+          body.improvement === undefined ? undefined : Number(body.improvement),
+        metadata: body.metadata ? JSON.stringify(body.metadata) : undefined,
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+http.route({
+  path: "/teo/decision",
   method: "OPTIONS",
   handler: httpAction(async () => {
     return new Response(null, { status: 204, headers: corsHeaders });

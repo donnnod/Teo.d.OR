@@ -10,6 +10,7 @@ nuance of the live engine.
 from __future__ import annotations
 
 from teo.models import BacktestMetrics, Candle, StrategyConfig
+from teo.strategies import get_strategy
 
 
 def _ema_series(values: list[float], period: int) -> list[float]:
@@ -35,7 +36,10 @@ def _atr_series(candles: list[Candle], period: int = 14) -> list[float]:
     return atr
 
 
-def run_backtest(candles: list[Candle], config: StrategyConfig) -> BacktestMetrics:
+def run_backtest(
+    candles: list[Candle], config: StrategyConfig, strategy_id: str = "edge"
+) -> BacktestMetrics:
+    strategy = get_strategy(strategy_id)
     n = len(candles)
     closes = [c.close for c in candles]
     if n < max(config.ema_trend + 2, 30):
@@ -56,26 +60,30 @@ def run_backtest(candles: list[Candle], config: StrategyConfig) -> BacktestMetri
 
     in_pos = False
     side = 0  # +1 long, -1 short
+    exposure = 1.0
     entry = sl = tp = 0.0
 
     for i in range(config.ema_trend, n):
         c = candles[i]
         if not in_pos:
-            crossed_up = ema_fast[i] > ema_slow[i] and ema_fast[i - 1] <= ema_slow[i - 1]
-            crossed_dn = ema_fast[i] < ema_slow[i] and ema_fast[i - 1] >= ema_slow[i - 1]
+            signal = strategy.signal(
+                fast_now=ema_fast[i],
+                fast_prev=ema_fast[i - 1],
+                slow_now=ema_slow[i],
+                slow_prev=ema_slow[i - 1],
+                config=config,
+            )
             a = atr[i] or 0.0
-            if a <= 0:
+            if signal is None or a <= 0:
                 continue
-            if crossed_up:
-                side, entry = 1, c.close
+            side, exposure, entry = signal.side, signal.exposure, c.close
+            if side == 1:
                 sl = entry - a * config.atr_sl_mult
                 tp = entry + a * config.atr_sl_mult * config.tp2_r
-                in_pos = True
-            elif crossed_dn:
-                side, entry = -1, c.close
+            else:
                 sl = entry + a * config.atr_sl_mult
                 tp = entry - a * config.atr_sl_mult * config.tp2_r
-                in_pos = True
+            in_pos = True
             continue
 
         # Manage open position on this bar's range.
@@ -83,9 +91,9 @@ def run_backtest(candles: list[Candle], config: StrategyConfig) -> BacktestMetri
         hit_tp = c.high >= tp if side == 1 else c.low <= tp
         result: float | None = None
         if hit_sl:
-            result = (sl - entry) * side
+            result = (sl - entry) * side * exposure
         elif hit_tp:
-            result = (tp - entry) * side
+            result = (tp - entry) * side * exposure
 
         if result is not None:
             equity += result

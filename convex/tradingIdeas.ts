@@ -20,8 +20,10 @@ export const logIdea = mutation({
         v.literal("dashboard"),
         v.literal("experimental"),
         v.literal("engine"),
+        v.literal("teo"),
       ),
     ),
+    asset: v.optional(v.string()),
     grade: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -126,16 +128,21 @@ export const getPerformanceStats = query({
         v.literal("dashboard"),
         v.literal("experimental"),
         v.literal("engine"),
+        v.literal("teo"),
         v.literal("all"),
       ),
     ),
+    asset: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let all = await ctx.db.query("tradingIdeas").collect();
 
-    // Filter by source if specified
+    // Filter by source and asset when specified.
     if (args.source && args.source !== "all") {
       all = all.filter(i => i.source === args.source);
+    }
+    if (args.asset) {
+      all = all.filter(i => i.asset === args.asset);
     }
 
     const closed = all.filter(

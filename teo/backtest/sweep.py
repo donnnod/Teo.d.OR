@@ -59,13 +59,14 @@ def run_sweep(
     grid: dict[str, list] | None = None,
     min_trades: int = 10,
     top_k: int = 5,
+    strategy_id: str = "edge",
 ) -> list[SweepResult]:
     """Backtest every config in the grid and return the top_k, best score first."""
     base = base or StrategyConfig()
     grid = grid or DEFAULT_GRID
     results: list[SweepResult] = []
     for cfg in _expand_grid(base, grid):
-        m = run_backtest(candles, cfg)
+        m = run_backtest(candles, cfg, strategy_id=strategy_id)
         results.append(
             SweepResult(config=cfg, metrics=m, score=score_metrics(m, min_trades=min_trades))
         )
