@@ -89,9 +89,10 @@ async def backtest(req: BacktestRequest) -> BacktestResponse:
     except Exception as e:
         raise HTTPException(502, f"failed to fetch candles: {e}") from e
 
-    metrics = run_backtest(candles, req.config)
+    metrics = run_backtest(candles, req.config, strategy_id=req.strategy_id)
     return BacktestResponse(
         symbol=req.symbol,
+        strategy_id=req.strategy_id,
         interval=req.interval,
         bars=len(candles),
         metrics=metrics,
@@ -141,13 +142,19 @@ async def optimize(req: OptimizeRequest) -> OptimizeResponse:
         raise HTTPException(502, f"failed to fetch candles: {e}") from e
 
     results = run_sweep(
-        candles, base=req.base, grid=req.grid, min_trades=req.min_trades, top_k=req.top_k
+        candles,
+        base=req.base,
+        grid=req.grid,
+        min_trades=req.min_trades,
+        top_k=req.top_k,
+        strategy_id=req.strategy_id,
     )
     ranked = [
         ScoredConfig(config=r.config, metrics=r.metrics, score=r.score) for r in results
     ]
     return OptimizeResponse(
         symbol=req.symbol,
+        strategy_id=req.strategy_id,
         interval=req.interval,
         bars=len(candles),
         regime=_regime_info(detect_regime(candles)),
@@ -165,9 +172,16 @@ async def selfheal(req: SelfHealRequest) -> SelfHealResponse:
     except Exception as e:
         raise HTTPException(502, f"failed to fetch candles: {e}") from e
 
-    current_metrics = run_backtest(candles, req.current)
+    current_metrics = run_backtest(candles, req.current, strategy_id=req.strategy_id)
     regime = detect_regime(candles)
-    sweep = run_sweep(candles, base=req.current, grid=req.grid, min_trades=req.min_trades, top_k=1)
+    sweep = run_sweep(
+        candles,
+        base=req.current,
+        grid=req.grid,
+        min_trades=req.min_trades,
+        top_k=1,
+        strategy_id=req.strategy_id,
+    )
     best = sweep[0] if sweep else None
 
     decision = assess(
@@ -222,6 +236,7 @@ async def selfheal(req: SelfHealRequest) -> SelfHealResponse:
 
     return SelfHealResponse(
         symbol=req.symbol,
+        strategy_id=req.strategy_id,
         interval=req.interval,
         bars=len(candles),
         regime=_regime_info(regime),

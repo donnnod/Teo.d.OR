@@ -3,13 +3,20 @@ import { query } from "./_generated/server";
 
 // List journal entries (newest first)
 export const list = query({
-  args: { limit: v.optional(v.number()) },
+  args: {
+    limit: v.optional(v.number()),
+    source: v.optional(v.string()),
+    asset: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    return await ctx.db
+    let rows = await ctx.db
       .query("signalJournal")
       .withIndex("by_timestamp")
       .order("desc")
       .take(args.limit ?? 500);
+    if (args.source) rows = rows.filter(row => row.source === args.source);
+    if (args.asset) rows = rows.filter(row => row.asset === args.asset);
+    return rows;
   },
 });
 

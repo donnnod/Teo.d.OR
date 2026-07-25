@@ -400,8 +400,11 @@ export const _logJournal = internalMutation({
       v.literal("ENGINE_RUN"),
       v.literal("MONITOR_CHECK"),
       v.literal("TRAIL_UPDATE"),
+      v.literal("TEO_DECISION"),
     ),
     ideaId: v.optional(v.id("tradingIdeas")),
+    source: v.optional(v.string()),
+    asset: v.optional(v.string()),
     direction: v.optional(v.union(v.literal("LONG"), v.literal("SHORT"))),
     price: v.optional(v.number()),
     details: v.string(),
@@ -410,6 +413,8 @@ export const _logJournal = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.insert("signalJournal", {
       ...args,
+      source: args.source ?? "engine",
+      asset: args.asset ?? SYMBOL,
       timestamp: Date.now(),
     });
   },

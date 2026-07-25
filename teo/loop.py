@@ -30,6 +30,7 @@ CandleFetcher = Callable[[str, str, int], Sequence[Candle]]
 @dataclass
 class CycleResult:
     symbol: str
+    strategy_id: str
     interval: str
     regime: str
     decision: HealthDecision
@@ -42,7 +43,7 @@ class CycleResult:
         if self.recalled is not None:
             rec = f" | recall[{self.regime}] best={self.recalled.score:.3f}"
         return (
-            f"{self.symbol} {self.interval} [{self.regime}] "
+            f"{self.symbol} {self.strategy_id}/{self.interval} [{self.regime}] "
             f"{self.decision.status}/{self.decision.action}{rec} — {self.decision.reason}"
         )
 
@@ -52,6 +53,7 @@ def run_cycle(
     candles: Sequence[Candle],
     *,
     current_config: StrategyConfig | None = None,
+    strategy_id: str = "edge",
     memory: OutcomeMemory,
     interval: str = "5m",
     grid: dict[str, list] | None = None,
@@ -62,9 +64,14 @@ def run_cycle(
     t = thresholds or HealthThresholds()
 
     regime = detect_regime(list(candles))
-    current_metrics = run_backtest(list(candles), current_config)
+    current_metrics = run_backtest(list(candles), current_config, strategy_id=strategy_id)
     sweep = run_sweep(
-        list(candles), base=current_config, grid=grid, min_trades=t.min_trades, top_k=1
+        list(candles),
+        base=current_config,
+        grid=grid,
+        min_trades=t.min_trades,
+        top_k=1,
+        strategy_id=strategy_id,
     )
     best = sweep[0] if sweep else None
 
@@ -94,6 +101,7 @@ def run_cycle(
 
     return CycleResult(
         symbol=symbol,
+        strategy_id=strategy_id,
         interval=interval,
         regime=regime.label,
         decision=decision,
@@ -107,6 +115,7 @@ def run_all(
     *,
     symbols: Sequence[str] | None = None,
     memory: OutcomeMemory,
+    strategy_id: str = "edge",
     interval: str = "5m",
     lookback: int = 1000,
     current_config: StrategyConfig | None = None,
@@ -123,6 +132,7 @@ def run_all(
             results.append(
                 CycleResult(
                     symbol=sym,
+                    strategy_id=strategy_id,
                     interval=interval,
                     regime="unknown",
                     decision=HealthDecision(
@@ -144,6 +154,7 @@ def run_all(
                 candles,
                 current_config=current_config,
                 memory=memory,
+                strategy_id=strategy_id,
                 interval=interval,
                 grid=grid,
                 thresholds=thresholds,
@@ -161,6 +172,10 @@ def _main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(description="Teo self-heal loop")
     p.add_argument("--symbol", help="single symbol; omit for all live tier-1 assets")
+    p.add_argument("--strategy", choices=("edge", "hedge"), default="edge")
+    p.add_argument(
+        "--submit", action="store_true", help="append decisions to the dashboard journal"
+    )
     p.add_argument("--interval", default="15m")
     p.add_argument("--lookback", type=int, default=1000)
     args = p.parse_args(argv)
@@ -172,8 +187,34 @@ def _main(argv: list[str] | None = None) -> int:
 
     symbols = [args.symbol] if args.symbol else None
     results = run_all(
-        fetch, symbols=symbols, memory=memory, interval=args.interval, lookback=args.lookback
+        fetch,
+        symbols=symbols,
+        memory=memory,
+        strategy_id=args.strategy,
+        interval=args.interval,
+        lookback=args.lookback,
     )
+    if args.submit:
+        from teo.dashboard import submit_decision_to_dashboard
+
+        for r in results:
+            asyncio.run(
+                submit_decision_to_dashboard(
+                    {
+                        "asset": r.symbol,
+                        "strategyId": r.strategy_id,
+                        "regime": r.regime,
+                        "status": r.decision.status,
+                        "action": r.decision.action,
+                        "reason": r.decision.reason,
+                        "currentScore": r.decision.current_score,
+                        "proposedScore": r.decision.proposed_score,
+                        "improvement": r.decision.improvement,
+                        "metadata": {"interval": r.interval, "bars": r.bars},
+                    }
+                )
+            )
+
     for r in results:
         print(r.summary())
     print(f"\n{len(results)} asset(s) checked · memory now holds {len(memory)} outcome(s)")
